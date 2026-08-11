@@ -66,36 +66,137 @@ function makeLegend(container,series,rerender){
 function drawChart(svg,xvals,series){
   const W=1100,H=540,M={l:72,r:25,t:26,b:48},iw=W-M.l-M.r,ih=H-M.t-M.b;
   svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  svg.style.touchAction='none';
+
   const visible=series.filter(s=>!s.hidden), all=visible.flatMap(s=>s.values.filter(Number.isFinite));
   if(!all.length)return;
-  let ymin=Math.min(0,...all),ymax=Math.max(0,...all),pad=(ymax-ymin||1)*.08;ymin-=pad;ymax+=pad;
-  const x=i=>M.l+(xvals.length===1?iw/2:i*iw/(xvals.length-1)), y=v=>M.t+(ymax-v)*ih/(ymax-ymin);
+
+  let ymin=Math.min(0,...all),ymax=Math.max(0,...all),pad=(ymax-ymin||1)*.08;
+  ymin-=pad;ymax+=pad;
+
+  const x=i=>M.l+(xvals.length===1?iw/2:i*iw/(xvals.length-1));
+  const y=v=>M.t+(ymax-v)*ih/(ymax-ymin);
+
   let out='';
-  for(let i=0;i<=6;i++){let val=ymin+(ymax-ymin)*i/6,yy=y(val);out+=`<line x1="${M.l}" y1="${yy}" x2="${W-M.r}" y2="${yy}" stroke="rgba(148,163,184,.15)"/><text x="${M.l-10}" y="${yy+4}" text-anchor="end" fill="#94a3b8" font-size="12">${Math.round(val)} %</text>`;}
-  const tickEvery=Math.max(1,Math.ceil(xvals.length/10));xvals.forEach((v,i)=>{if(i%tickEvery===0||i===xvals.length-1)out+=`<text x="${x(i)}" y="${H-16}" text-anchor="middle" fill="#94a3b8" font-size="12">${v}</text>`;});
-  out+=`<line x1="${M.l}" y1="${y(0)}" x2="${W-M.r}" y2="${y(0)}" stroke="rgba(229,231,235,.35)"/>`;
-  visible.forEach(s=>{let d='';s.values.forEach((v,i)=>{if(Number.isFinite(v))d+=(d?'L':'M')+x(i).toFixed(1)+','+y(v).toFixed(1);});out+=`<path d="${d}" fill="none" stroke="${s.color}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>`;});
-  out+=`<line id="hoverLine" x1="0" y1="${M.t}" x2="0" y2="${H-M.b}" stroke="rgba(229,231,235,.5)" stroke-dasharray="4 4" style="display:none"/><rect id="hit" x="${M.l}" y="${M.t}" width="${iw}" height="${ih}" fill="transparent"/>`;
-  svg.innerHTML=out;
-  const hit=svg.querySelector('#hit'),hover=svg.querySelector('#hoverLine');
-  hit.addEventListener('mousemove',e=>{
-    const rect=svg.getBoundingClientRect(),sx=W/rect.width,mx=(e.clientX-rect.left)*sx;
-    let i=Math.round((mx-M.l)/iw*(xvals.length-1));i=Math.max(0,Math.min(xvals.length-1,i));
-    hover.setAttribute('x1',x(i));hover.setAttribute('x2',x(i));hover.style.display='block';
-    let h=`<b>${xvals[i]}</b>`;visible.forEach(s=>{const v=s.values[i];if(Number.isFinite(v))h+=`<div style="color:${s.color}">${s.label} : <b>${fmt(v)}</b></div>`;});
-    tooltip.innerHTML=h;tooltip.style.display='block';tooltip.style.left=(e.clientX+14)+'px';tooltip.style.top=(e.clientY+14)+'px';
+  for(let i=0;i<=6;i++){
+    let val=ymin+(ymax-ymin)*i/6,yy=y(val);
+    out+=`<line x1="${M.l}" y1="${yy}" x2="${W-M.r}" y2="${yy}" stroke="rgba(148,163,184,.15)"/>`;
+    out+=`<text x="${M.l-10}" y="${yy+4}" text-anchor="end" fill="#94a3b8" font-size="12">${Math.round(val)} %</text>`;
+  }
+
+  const tickEvery=Math.max(1,Math.ceil(xvals.length/10));
+  xvals.forEach((v,i)=>{
+    if(i%tickEvery===0||i===xvals.length-1)
+      out+=`<text x="${x(i)}" y="${H-16}" text-anchor="middle" fill="#94a3b8" font-size="12">${v}</text>`;
   });
-  hit.addEventListener('mouseleave',()=>{hover.style.display='none';tooltip.style.display='none';});
+
+  out+=`<line x1="${M.l}" y1="${y(0)}" x2="${W-M.r}" y2="${y(0)}" stroke="rgba(229,231,235,.35)"/>`;
+
+  visible.forEach(s=>{
+    let d='';
+    s.values.forEach((v,i)=>{
+      if(Number.isFinite(v)) d+=(d?'L':'M')+x(i).toFixed(1)+','+y(v).toFixed(1);
+    });
+    out+=`<path d="${d}" fill="none" stroke="${s.color}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>`;
+  });
+
+  out+=`<line id="hoverLine" x1="0" y1="${M.t}" x2="0" y2="${H-M.b}" stroke="rgba(229,231,235,.65)" stroke-dasharray="4 4" style="display:none"/>`;
+  out+=`<g id="hoverDots"></g>`;
+  out+=`<rect id="hit" x="${M.l}" y="${M.t}" width="${iw}" height="${ih}" fill="transparent" style="cursor:crosshair"/>`;
+  svg.innerHTML=out;
+
+  const hit=svg.querySelector('#hit');
+  const hover=svg.querySelector('#hoverLine');
+  const dots=svg.querySelector('#hoverDots');
+
+  function showAt(clientX, clientY){
+    const rect=svg.getBoundingClientRect();
+    const sx=W/rect.width;
+    const mx=(clientX-rect.left)*sx;
+    let i=Math.round((mx-M.l)/iw*(xvals.length-1));
+    i=Math.max(0,Math.min(xvals.length-1,i));
+
+    const xx=x(i);
+    hover.setAttribute('x1',xx);
+    hover.setAttribute('x2',xx);
+    hover.style.display='block';
+
+    dots.innerHTML='';
+    let html=`<div style="font-size:13px;margin-bottom:4px"><b>${xvals[i]}</b></div>`;
+
+    visible.forEach(s=>{
+      const v=s.values[i];
+      if(!Number.isFinite(v)) return;
+
+      const cy=y(v);
+      dots.insertAdjacentHTML('beforeend',
+        `<circle cx="${xx}" cy="${cy}" r="5" fill="${s.color}" stroke="#fff" stroke-width="1.5"/>`
+      );
+
+      html+=`<div style="display:flex;justify-content:space-between;gap:14px;color:${s.color}">
+        <span>${s.label}</span><b>${fmt(v)}</b>
+      </div>`;
+
+      if(s.details && s.details[i]){
+        const det=s.details[i];
+        if(det.index!=null) html+=`<div style="color:#94a3b8;padding-left:8px">Indice : ${det.index.toFixed(2).replace('.',',')}</div>`;
+      }
+    });
+
+    tooltip.innerHTML=html;
+    tooltip.style.display='block';
+
+    const tw=tooltip.offsetWidth||240, th=tooltip.offsetHeight||120;
+    const vw=window.innerWidth, vh=window.innerHeight;
+    let left=clientX+14, top=clientY+14;
+    if(left+tw>vw-8) left=clientX-tw-14;
+    if(top+th>vh-8) top=clientY-th-14;
+    tooltip.style.left=Math.max(8,left)+'px';
+    tooltip.style.top=Math.max(8,top)+'px';
+  }
+
+  function hide(){
+    hover.style.display='none';
+    dots.innerHTML='';
+    tooltip.style.display='none';
+  }
+
+  hit.addEventListener('pointermove',e=>{
+    showAt(e.clientX,e.clientY);
+  });
+
+  hit.addEventListener('pointerdown',e=>{
+    hit.setPointerCapture?.(e.pointerId);
+    showAt(e.clientX,e.clientY);
+  });
+
+  hit.addEventListener('pointerup',e=>{
+    if(e.pointerType==='mouse') hide();
+  });
+
+  hit.addEventListener('pointerleave',e=>{
+    if(e.pointerType==='mouse') hide();
+  });
+
+  // On touch, keep the tooltip visible after release; tap elsewhere to dismiss.
+  document.addEventListener('pointerdown',e=>{
+    if(!svg.contains(e.target) && tooltip.style.display==='block') hide();
+  }, {passive:true});
 }
 
 let countrySeries=[
-  {label:'Immobilier nominal',color:COLORS[0],hidden:false,values:[]},
-  {label:'Inflation cumulée',color:COLORS[1],hidden:false,values:[]},
-  {label:'Immobilier réel',color:COLORS[2],hidden:false,values:[]}
+  {label:'Immobilier nominal',color:COLORS[0],hidden:false,values:[],details:[]},
+  {label:'Inflation cumulée',color:COLORS[1],hidden:false,values:[],details:[]},
+  {label:'Immobilier réel',color:COLORS[2],hidden:false,values:[],details:[]}
 ];
 function renderCountry(legend=true){
   const code=countrySel.value,start=+startSel.value,d=seriesFrom(code,start);if(!d.length)return;
-  countrySeries[0].values=d.map(x=>x.nominal);countrySeries[1].values=d.map(x=>x.inflation);countrySeries[2].values=d.map(x=>x.real);
+  countrySeries[0].values=d.map(x=>x.nominal);
+  countrySeries[1].values=d.map(x=>x.inflation);
+  countrySeries[2].values=d.map(x=>x.real);
+  countrySeries[0].details=d.map(x=>({index:x.nominalIndex}));
+  countrySeries[1].details=d.map(x=>({index:x.cpiIndex}));
+  countrySeries[2].details=d.map(x=>({index:100*(1+x.real/100)}));
   const last=d[d.length-1],years=d.length-1;
   cNom.textContent=fmt(last.nominal);cInf.textContent=fmt(last.inflation);cReal.textContent=fmt(last.real);
   cCagr.textContent=years>0?fmt((Math.pow(1+last.real/100,1/years)-1)*100):'—';
