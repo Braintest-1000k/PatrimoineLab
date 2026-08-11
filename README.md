@@ -24,3 +24,8 @@ Mini-site statique d'analyse patrimoniale.
 
 ## Sources
 Bank for International Settlements (BIS), Residential Property Price statistics.
+
+## V1.1
+- Rétablissement du survol interactif sur ordinateur.
+- Support tactile iPhone/iPad par glissement sur le graphique.
+- Affichage de l'année, des variations cumulées et des indices base 100.
