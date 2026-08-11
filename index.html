@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0b1220">
+  <title>PatrimoineLab</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">PatrimoineLab</div>
+        <h1>Immobilier mondial & allocation patrimoniale</h1>
+        <p class="subtitle">V1 — prix immobiliers, inflation, comparaison réelle et simulation de réinvestissement des loyers.</p>
+      </div>
+    </header>
+
+    <nav class="tabs" aria-label="Navigation principale">
+      <button class="tab active" data-view="countryView">Détail par pays</button>
+      <button class="tab" data-view="compareView">Comparaison réelle</button>
+      <button class="tab" data-view="simView">Simulation loyers → MSCI World</button>
+    </nav>
+
+    <main>
+      <section id="countryView" class="view active">
+        <div class="controls">
+          <div class="control"><label for="countrySel">Pays</label><select id="countrySel"></select></div>
+          <div class="control"><label for="startSel">Année de départ</label><select id="startSel"></select></div>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="k">Immobilier nominal</div><div class="v" id="cNom">—</div></div>
+          <div class="stat"><div class="k">Inflation cumulée</div><div class="v" id="cInf">—</div></div>
+          <div class="stat"><div class="k">Immobilier réel</div><div class="v" id="cReal">—</div></div>
+          <div class="stat"><div class="k">CAGR réel immobilier</div><div class="v" id="cCagr">—</div></div>
+        </div>
+        <div class="panel">
+          <div id="legendCountry" class="legend"></div>
+          <svg id="chartCountry" role="img" aria-label="Évolution immobilière et inflation"></svg>
+        </div>
+      </section>
+
+      <section id="compareView" class="view">
+        <div class="controls">
+          <div class="control"><label for="compareStart">Année de départ</label><select id="compareStart"></select></div>
+        </div>
+        <div class="callout">Cette vue compare uniquement la hausse <b>réelle</b> des prix immobiliers, donc déjà corrigée de l’inflation.</div>
+        <div class="panel">
+          <div id="legendCompare" class="legend"></div>
+          <svg id="chartCompare" role="img" aria-label="Comparaison immobilière réelle internationale"></svg>
+        </div>
+      </section>
+
+      <section id="simView" class="view">
+        <div class="controls">
+          <div class="control"><label for="simCountry">Pays</label><select id="simCountry"></select></div>
+          <div class="control"><label for="simStart">Année d’achat</label><select id="simStart"></select></div>
+          <div class="control"><label for="rentYield">Rendement locatif initial</label><div class="inline"><input id="rentYield" type="number" min="0" max="15" step="0.1" value="4.0"><span>%</span></div></div>
+          <div class="control"><label for="debtYears">Durée remboursement</label><div class="inline"><input id="debtYears" type="number" min="1" max="40" step="1" value="20"><span>ans</span></div></div>
+          <div class="control"><label for="reinvestPct">Loyers réinvestissables</label><div class="inline"><input id="reinvestPct" type="number" min="0" max="100" step="1" value="70"><span>%</span></div></div>
+          <div class="control"><label for="worldReturn">Rendement World simulé</label><div class="inline"><input id="worldReturn" type="number" min="-10" max="20" step="0.1" value="8.0"><span>%/an</span></div></div>
+        </div>
+
+        <div id="simMsg" class="callout"></div>
+        <div class="stats">
+          <div class="stat"><div class="k">Valeur du bien</div><div class="v" id="sProp">—</div></div>
+          <div class="stat"><div class="k">Portefeuille World</div><div class="v" id="sWorld">—</div></div>
+          <div class="stat"><div class="k">Patrimoine total</div><div class="v" id="sTotal">—</div></div>
+          <div class="stat"><div class="k">Inflation</div><div class="v" id="sInf">—</div></div>
+        </div>
+        <div class="panel">
+          <div id="legendSim" class="legend"></div>
+          <svg id="chartSim" role="img" aria-label="Simulation de réinvestissement des loyers"></svg>
+        </div>
+        <p class="note">Hypothèse V1 : le MSCI World utilise un rendement nominal constant paramétrable, et non encore la série historique réelle. Les loyers progressent avec l’inflation locale. Les 20 premières années servent au remboursement ; à partir de la 21e année, 70 % des loyers sont réinvestis par défaut.</p>
+      </section>
+    </main>
+
+    <footer>
+      <p>Source immobilière : Bank for International Settlements (BIS), séries résidentielles nominales et réelles. Période : 1975–2025.</p>
+    </footer>
+  </div>
+
+  <div id="tooltip" class="tooltip"></div>
+  <script src="app.js"></script>
+</body>
+</html>
