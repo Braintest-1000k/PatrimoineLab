@@ -29,3 +29,8 @@ Bank for International Settlements (BIS), Residential Property Price statistics.
 - Rétablissement du survol interactif sur ordinateur.
 - Support tactile iPhone/iPad par glissement sur le graphique.
 - Affichage de l'année, des variations cumulées et des indices base 100.
+
+## V1.2
+- Support tactile Safari iOS via touchstart/touchmove natifs.
+- Bandeau de lecture fixe au-dessus du graphique sur mobile.
+- Cache-busting app.js?v=1.2 pour forcer iPhone à charger la nouvelle version.

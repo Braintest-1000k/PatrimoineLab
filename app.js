@@ -67,8 +67,11 @@ function drawChart(svg,xvals,series){
   const W=1100,H=540,M={l:72,r:25,t:26,b:48},iw=W-M.l-M.r,ih=H-M.t-M.b;
   svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
   svg.style.touchAction='none';
+  svg.style.webkitUserSelect='none';
+  svg.style.userSelect='none';
 
-  const visible=series.filter(s=>!s.hidden), all=visible.flatMap(s=>s.values.filter(Number.isFinite));
+  const visible=series.filter(s=>!s.hidden);
+  const all=visible.flatMap(s=>s.values.filter(Number.isFinite));
   if(!all.length)return;
 
   let ymin=Math.min(0,...all),ymax=Math.max(0,...all),pad=(ymax-ymin||1)*.08;
@@ -79,15 +82,16 @@ function drawChart(svg,xvals,series){
 
   let out='';
   for(let i=0;i<=6;i++){
-    let val=ymin+(ymax-ymin)*i/6,yy=y(val);
+    const val=ymin+(ymax-ymin)*i/6, yy=y(val);
     out+=`<line x1="${M.l}" y1="${yy}" x2="${W-M.r}" y2="${yy}" stroke="rgba(148,163,184,.15)"/>`;
     out+=`<text x="${M.l-10}" y="${yy+4}" text-anchor="end" fill="#94a3b8" font-size="12">${Math.round(val)} %</text>`;
   }
 
   const tickEvery=Math.max(1,Math.ceil(xvals.length/10));
   xvals.forEach((v,i)=>{
-    if(i%tickEvery===0||i===xvals.length-1)
+    if(i%tickEvery===0||i===xvals.length-1){
       out+=`<text x="${x(i)}" y="${H-16}" text-anchor="middle" fill="#94a3b8" font-size="12">${v}</text>`;
+    }
   });
 
   out+=`<line x1="${M.l}" y1="${y(0)}" x2="${W-M.r}" y2="${y(0)}" stroke="rgba(229,231,235,.35)"/>`;
@@ -100,88 +104,105 @@ function drawChart(svg,xvals,series){
     out+=`<path d="${d}" fill="none" stroke="${s.color}" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>`;
   });
 
-  out+=`<line id="hoverLine" x1="0" y1="${M.t}" x2="0" y2="${H-M.b}" stroke="rgba(229,231,235,.65)" stroke-dasharray="4 4" style="display:none"/>`;
+  out+=`<line id="hoverLine" x1="0" y1="${M.t}" x2="0" y2="${H-M.b}" stroke="rgba(229,231,235,.7)" stroke-dasharray="4 4" style="display:none"/>`;
   out+=`<g id="hoverDots"></g>`;
-  out+=`<rect id="hit" x="${M.l}" y="${M.t}" width="${iw}" height="${ih}" fill="transparent" style="cursor:crosshair"/>`;
+  out+=`<rect id="hit" x="${M.l}" y="${M.t}" width="${iw}" height="${ih}" fill="transparent" pointer-events="all"/>`;
   svg.innerHTML=out;
+
+  // Create/reuse a mobile-friendly readout directly above the SVG.
+  let readout=svg.parentElement.querySelector('.chart-readout');
+  if(!readout){
+    readout=document.createElement('div');
+    readout.className='chart-readout';
+    readout.style.cssText='display:none;margin:8px 0 10px;padding:10px 12px;border:1px solid rgba(148,163,184,.22);border-radius:10px;background:#0b1220;color:#e5e7eb;font-size:13px;line-height:1.45;';
+    svg.parentElement.insertBefore(readout,svg);
+  }
 
   const hit=svg.querySelector('#hit');
   const hover=svg.querySelector('#hoverLine');
   const dots=svg.querySelector('#hoverDots');
 
-  function showAt(clientX, clientY){
+  function indexFromClientX(clientX){
     const rect=svg.getBoundingClientRect();
     const sx=W/rect.width;
     const mx=(clientX-rect.left)*sx;
     let i=Math.round((mx-M.l)/iw*(xvals.length-1));
-    i=Math.max(0,Math.min(xvals.length-1,i));
+    return Math.max(0,Math.min(xvals.length-1,i));
+  }
 
+  function renderReadout(i,clientX=null,clientY=null,isTouch=false){
     const xx=x(i);
     hover.setAttribute('x1',xx);
     hover.setAttribute('x2',xx);
     hover.style.display='block';
-
     dots.innerHTML='';
-    let html=`<div style="font-size:13px;margin-bottom:4px"><b>${xvals[i]}</b></div>`;
 
+    let html=`<div style="font-size:14px;margin-bottom:5px"><b>${xvals[i]}</b></div>`;
     visible.forEach(s=>{
       const v=s.values[i];
-      if(!Number.isFinite(v)) return;
-
-      const cy=y(v);
+      if(!Number.isFinite(v))return;
       dots.insertAdjacentHTML('beforeend',
-        `<circle cx="${xx}" cy="${cy}" r="5" fill="${s.color}" stroke="#fff" stroke-width="1.5"/>`
+        `<circle cx="${xx}" cy="${y(v)}" r="5" fill="${s.color}" stroke="#fff" stroke-width="1.5"/>`
       );
-
       html+=`<div style="display:flex;justify-content:space-between;gap:14px;color:${s.color}">
         <span>${s.label}</span><b>${fmt(v)}</b>
       </div>`;
-
-      if(s.details && s.details[i]){
-        const det=s.details[i];
-        if(det.index!=null) html+=`<div style="color:#94a3b8;padding-left:8px">Indice : ${det.index.toFixed(2).replace('.',',')}</div>`;
+      if(s.details && s.details[i] && s.details[i].index!=null){
+        html+=`<div style="color:#94a3b8;padding-left:8px">Indice base 100 : ${s.details[i].index.toFixed(2).replace('.',',')}</div>`;
       }
     });
 
-    tooltip.innerHTML=html;
-    tooltip.style.display='block';
-
-    const tw=tooltip.offsetWidth||240, th=tooltip.offsetHeight||120;
-    const vw=window.innerWidth, vh=window.innerHeight;
-    let left=clientX+14, top=clientY+14;
-    if(left+tw>vw-8) left=clientX-tw-14;
-    if(top+th>vh-8) top=clientY-th-14;
-    tooltip.style.left=Math.max(8,left)+'px';
-    tooltip.style.top=Math.max(8,top)+'px';
+    if(isTouch){
+      readout.innerHTML=html;
+      readout.style.display='block';
+      tooltip.style.display='none';
+    }else if(clientX!=null && clientY!=null){
+      tooltip.innerHTML=html;
+      tooltip.style.display='block';
+      const tw=tooltip.offsetWidth||240, th=tooltip.offsetHeight||120;
+      const vw=window.innerWidth, vh=window.innerHeight;
+      let left=clientX+14, top=clientY+14;
+      if(left+tw>vw-8) left=clientX-tw-14;
+      if(top+th>vh-8) top=clientY-th-14;
+      tooltip.style.left=Math.max(8,left)+'px';
+      tooltip.style.top=Math.max(8,top)+'px';
+    }
   }
 
-  function hide(){
-    hover.style.display='none';
-    dots.innerHTML='';
+  function hideDesktop(){
     tooltip.style.display='none';
   }
 
-  hit.addEventListener('pointermove',e=>{
-    showAt(e.clientX,e.clientY);
+  // Desktop mouse
+  hit.addEventListener('mousemove',e=>{
+    renderReadout(indexFromClientX(e.clientX),e.clientX,e.clientY,false);
   });
+  hit.addEventListener('mouseleave',hideDesktop);
 
+  // iPhone / iPad: native touch events (more reliable than pointer events on SVG)
+  const onTouch=e=>{
+    if(!e.touches || !e.touches.length)return;
+    e.preventDefault();
+    const t=e.touches[0];
+    renderReadout(indexFromClientX(t.clientX),null,null,true);
+  };
+
+  hit.addEventListener('touchstart',onTouch,{passive:false});
+  hit.addEventListener('touchmove',onTouch,{passive:false});
+
+  // Also support Pointer Events for modern browsers/styluses.
   hit.addEventListener('pointerdown',e=>{
-    hit.setPointerCapture?.(e.pointerId);
-    showAt(e.clientX,e.clientY);
+    if(e.pointerType!=='mouse'){
+      e.preventDefault();
+      renderReadout(indexFromClientX(e.clientX),null,null,true);
+    }
   });
-
-  hit.addEventListener('pointerup',e=>{
-    if(e.pointerType==='mouse') hide();
+  hit.addEventListener('pointermove',e=>{
+    if(e.pointerType!=='mouse' && e.buttons){
+      e.preventDefault();
+      renderReadout(indexFromClientX(e.clientX),null,null,true);
+    }
   });
-
-  hit.addEventListener('pointerleave',e=>{
-    if(e.pointerType==='mouse') hide();
-  });
-
-  // On touch, keep the tooltip visible after release; tap elsewhere to dismiss.
-  document.addEventListener('pointerdown',e=>{
-    if(!svg.contains(e.target) && tooltip.style.display==='block') hide();
-  }, {passive:true});
 }
 
 let countrySeries=[
